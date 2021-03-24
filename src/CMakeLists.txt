@@ -18,7 +18,8 @@ add_executable(classify
         mmscanner.cc
         omp_hack.cc
         aa_translate.cc
-        utilities.cc)
+        utilities.cc
+        filter_reads.cc)
 
 add_executable(estimate_capacity
         estimate_capacity.cc

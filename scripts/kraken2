@@ -43,6 +43,9 @@ my $unclassified_out;
 my $classified_out;
 my $outfile;
 my $confidence_threshold = 0.0;
+my $f_threshold = 0.25;
+my $unmapped_threshold = 0.95;
+my $keep_unmapped_reads = 0;
 my $minimum_base_quality = 0;
 my $report_filename;
 my $use_mpa_style = 0;
@@ -60,6 +63,9 @@ GetOptions(
   "classified-out=s" => \$classified_out,
   "output=s" => \$outfile,
   "confidence=f" => \$confidence_threshold,
+  "f-threshold=f" => \$f_threshold,
+  "unmapped-threshold=f" => \$unmapped_threshold,
+  "keep-unmapped-reads" => \$keep_unmapped_reads,
   "memory-mapping" => \$memory_mapping,
   "paired" => \$paired,
   "use-names" => \$names_in_output,
@@ -114,6 +120,18 @@ if ($confidence_threshold > 1) {
 if ($minimum_hit_groups < 0) {
   die "$PROG: minimum number of hit groups must be nonnegative\n";
 }
+if ($f_threshold < 0) {
+  die "$PROG: F-threshold must be nonnegative\n";
+}
+if ($f_threshold > 1) {
+  die "$PROG: F-threshold must be no greater than 1\n";
+}
+if ($unmapped_threshold < 0) {
+  die "$PROG: unmapped-threshold must be nonnegative\n";
+}
+if ($unmapped_threshold > 1) {
+  die "$PROG: unmapped-threshold must be no greater than 1\n";
+}
 
 my $auto_detect = ! $compressed;
 if ($auto_detect) {
@@ -139,7 +157,11 @@ push @flags, "-m" if $use_mpa_style;
 push @flags, "-z" if $report_zero_counts;
 push @flags, "-M" if $memory_mapping;
 push @flags, "-g", $minimum_hit_groups;
+push @flags, "-F", $f_threshold;
+push @flags, "-u", $unmapped_threshold;
+push @flags, "-k", if $keep_unmapped_reads;
 push @flags, "-K" if $report_minimizer_data;
+
 
 # Stupid hack to keep filehandles from closing before exec
 # filehandles opened inside for loop below go out of scope
@@ -216,6 +238,12 @@ Options:
                           Minimum number of hit groups (overlapping k-mers
                           sharing the same minimizer) needed to make a call
                           (default: $minimum_hit_groups)
+  --f-threshold FLOAT     F-threshold (default: 0.25); must be
+                          in [0, 1].
+  --unmapped-threshold FLOAT
+                          unmapped-threshold (default: 0.95); must be
+                          in [0, 1].
+  --keep-unmapped-reads   Classify unmapped reads as viral
   --help                  Print this message
   --version               Print version information
 

@@ -17,6 +17,8 @@
 #include "readcounts.h"
 using namespace kraken2;
 
+#include "filter_reads.h"
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -56,6 +58,9 @@ struct Options {
   int minimum_hit_groups;
   bool use_memory_mapping;
   bool match_input_order;
+  double f_threshold;
+  double unmapped_threshold;
+  bool keep_unmapped_reads;
 };
 
 struct ClassificationStats {
@@ -118,6 +123,9 @@ int main(int argc, char **argv) {
   opts.minimum_quality_score = 0;
   opts.minimum_hit_groups = 0;
   opts.use_memory_mapping = false;
+  opts.f_threshold = 0.25;
+  opts.unmapped_threshold = 0.95;
+  opts.keep_unmapped_reads = false;
 
   taxon_counters_t taxon_counters; // stats per taxon
   ParseCommandLine(argc, argv, opts);
@@ -141,6 +149,7 @@ int main(int argc, char **argv) {
   cerr << " done." << endl;
 
   ClassificationStats stats = {0, 0, 0};
+  taxon_counts_t call_counts;
 
   OutputStreamData outputs = { false, false, nullptr, nullptr, nullptr, nullptr, &std::cout };
 
@@ -254,8 +263,9 @@ void ProcessFiles(const char *filename1, const char *filename2,
                              idx_opts.revcom_version);
     vector<taxid_t> taxa;
     taxon_counts_t hit_counts;
-    ostringstream kraken_oss, c1_oss, c2_oss, u1_oss, u2_oss;
+    ostringstream kraken_oss, c1_oss, c2_oss, u1_oss, u2_oss, single_read_k_oss;
     ClassificationStats thread_stats = {0, 0, 0};
+    vector<taxid_t> calls;
     vector<string> translated_frames(6);
     BatchSequenceReader reader1, reader2;
     Sequence seq1, seq2;
@@ -296,6 +306,7 @@ void ProcessFiles(const char *filename1, const char *filename2,
         break;
 
       // Reset all dynamically-growing things
+      calls.clear();
       kraken_oss.str("");
       c1_oss.str("");
       c2_oss.str("");
@@ -320,27 +331,29 @@ void ProcessFiles(const char *filename1, const char *filename2,
             MaskLowQualityBases(seq2, opts.minimum_quality_score);
         }
         auto call = ClassifySequence(seq1, seq2,
-            kraken_oss, hash, tax, idx_opts, opts, thread_stats, scanner,
+            single_read_k_oss, hash, tax,
+            idx_opts, opts, thread_stats, scanner,
             taxa, hit_counts, translated_frames, thread_taxon_counters);
-        if (call) {
+        kraken_oss << single_read_k_oss.str();
+        Read read(single_read_k_oss.str(), /*f_threshold=*/opts.f_threshold, /*unmapped_thr=*/opts.unmapped_threshold, /*keep_unmapped_reads*/ opts.keep_unmapped_reads);
+        if (read.is_viral()) {
+          //kraken_oss << single_read_k_oss.str();
+          //thread_stats.total_classified++;
           char buffer[1024] = "";
           sprintf(buffer, " kraken:taxid|%llu",
-              (unsigned long long) tax.nodes()[call].external_id);
+			  (unsigned long long) tax.nodes()[call].external_id);
           seq1.header += buffer;
+          seq2.header += buffer;
           c1_oss << seq1.to_string();
-          if (opts.paired_end_processing) {
-            seq2.header += buffer;
-            c2_oss << seq2.to_string();
-          }
-        }
-        else {
-          u1_oss << seq1.to_string();
           if (opts.paired_end_processing)
-            u2_oss << seq2.to_string();
+            c2_oss << seq2.to_string();
+          calls.push_back(call);
+          thread_stats.total_bases += seq1.seq.size();
+          if (opts.paired_end_processing)
+            thread_stats.total_bases += seq2.seq.size();
+
         }
-        thread_stats.total_bases += seq1.seq.size();
-        if (opts.paired_end_processing)
-          thread_stats.total_bases += seq2.seq.size();
+        single_read_k_oss.str("");
       }
 
       #pragma omp atomic
@@ -738,7 +751,7 @@ void MaskLowQualityBases(Sequence &dna, int minimum_quality_score) {
 void ParseCommandLine(int argc, char **argv, Options &opts) {
   int opt;
 
-  while ((opt = getopt(argc, argv, "h?H:t:o:T:p:R:C:U:O:Q:g:nmzqPSMK")) != -1) {
+  while ((opt = getopt(argc, argv, "h?H:t:o:T:p:R:C:U:O:Q:g:F:u:knmzqPSMK")) != -1) {
     switch (opt) {
       case 'h' : case '?' :
         usage(0);
@@ -768,6 +781,21 @@ void ParseCommandLine(int argc, char **argv, Options &opts) {
         break;
       case 'g' :
         opts.minimum_hit_groups = atoi(optarg);
+        break;
+      case 'F' :
+        opts.f_threshold = std::stod(optarg);
+        if (opts.f_threshold < 0 || opts.f_threshold > 1) {
+          errx(EX_USAGE, "F-threshold must be in [0, 1]");
+        }
+        break;
+      case 'u' :
+        opts.unmapped_threshold = std::stod(optarg);
+        if (opts.unmapped_threshold < 0 || opts.unmapped_threshold > 1) {
+          errx(EX_USAGE, "unmapped-threshold must be in [0, 1]");
+        }
+        break;
+      case 'k' :
+        opts.keep_unmapped_reads = true;
         break;
       case 'P' :
         opts.paired_end_processing = true;
@@ -842,9 +870,13 @@ void usage(int exit_code) {
        << "  -z               In comb. w/ -R, report taxa w/ 0 count" << endl
        << "  -n               Print scientific name instead of taxid in Kraken output" << endl
        << "  -g NUM           Minimum number of hit groups needed for call" << endl
+       << "  -F NUM           F-threshold for classification (def. 0.25)" << endl
+       << "  -u NUM           unmapped-threshold for classification (def. 0.95)" << endl
+       << "  -k               keep unmapped reads as viral" << endl
        << "  -C filename      Filename/format to have classified sequences" << endl
        << "  -U filename      Filename/format to have unclassified sequences" << endl
        << "  -O filename      Output file for normal Kraken output" << endl
-       << "  -K               In comb. w/ -R, provide minimizer information in report" << endl;
+       << "  -K               In comb. w/ -R, provide minimizer information in report" << endl
+       << "  -O filename      Output file for normal Kraken output" << endl;
   exit(exit_code);
 }
