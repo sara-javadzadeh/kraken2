@@ -1,13 +1,12 @@
 #!/bin/bash
 
-echo "--------------downloading the library--------------" &>> log &&
 
 #####################################################################################################################
 # Note that input fasta files should match the required kraken fasta description. See make_seqid2taxid_map.pl
 #####################################################################################################################
 
 if [ $# -ne 5 ]; then
-  echo "Usage: $0 <kmer length> <suffix> <fasta file containing all viral references> <first taxonomy id for the viral library to add> <include human genome? 0 or 1>" >> log
+  echo "Usage: bash $0 <kmer length> <suffix> <fasta file containing all viral references> <first taxonomy id for the viral library to add> <include human genome? 0 or 1>" >> log
   exit 1
 fi
 
@@ -17,6 +16,7 @@ LIBRARY_INPUT=$3
 BASE_NODE_ID=$4
 INCLUDE_HUMAN_GENOME=$5
 
+echo "--------------downloading the library--------------" &>> log &&
 
 DB_NAME="Kraken2StandardDB_k_${K}_${SUFFIX}"
 

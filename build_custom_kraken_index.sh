@@ -1,6 +1,6 @@
 #!/bin/bash
 if [ $# -ne 2 ]; then
-  echo "Usage: $0 <virus name, also the suffix for the database> <kmer length>"
+  echo "Usage: bash $0 <virus name, also the suffix for the database> <kmer length>"
   exit 1
 fi
 
