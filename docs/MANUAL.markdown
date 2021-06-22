@@ -404,6 +404,23 @@ To build a protein database, the `--protein` option should be given to
 building a custom database).
 
 
+Custom Databases for FastViFi
+=============================
+In order to create *three* custom databases for FastViFi, use the command:
+```
+bash build_custom_kraken_database.sh <virus name> <input fasta> <base node ID>
+```
+Based on the following arguments:
+`<virus name>`: Virus name in lower case, choose from the list: hpv, hbv, hcv, or ebv. FastViFi has been tested with Kraken2 databases with only one virus at a time. If you wish to test a sample for multiple viruses, we suggest creating separate Kraken2 databases and test both viruses when running FastViFi (refer to https://github.com/sara-javadzadeh/FastViFi#running).
+`<input fasta>`: Path to the input fasta file containing all references of the same virus. We suggest using the same set of refernces for ViFi and Kraken2 filters. To obtain the reference files for a virus, first clone the ViFi repository (https://github.com/sara-javadzadeh/ViFi). Next, un-compress the file `viral_data.tar.gz`, the viral reference for each of the desired viruses can be found on `viral_data/<virus>/<virus>.unaligned.fas*`  where `<virus>` can be either of the following: hpv, hbv, hcv or ebv.
+`<base node id>`: As the viral references are added to Kraken2 externally, the taxonomy information for the custom reference file should be provided (such as node IDs). Our custom database script creates taxonomy IDs for all the references in the input FASTA file, starting from the `<base node id>` and incrementing by 1. For `<base node id>`, choose a large number that is not repeated in the default taxonomy labeling in Kraken. Use 9000000 if only working on one virus type. To avoid confusions in the analysis, we suggest using a different base node ID if you are working with multiple viruses, even when creating different custom Kraken2 databases. For example, use 9000000 for HBV and 9100000 for HCV, if you are working on these two viruses.
+
+Before proceeding to running FastViFi, check the following in `all three` Kraken2 databases:
+
+- In each database file, check for presence of the following three index files: hash.k2d, opts.k2d and taxo.k2d
+You can further inspect each database by running `./kraken2-inspect --db <database name>`
+
+
 Custom Databases
 ================
 
