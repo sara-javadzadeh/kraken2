@@ -81,5 +81,5 @@ if [ $(grep $BASE_NODE_ID $NAMES_FILE | wc -l) == 0 ]; then
   done
 fi
 
-rm -r ${DB_NAME}/library/added &>>log
+rm -rf ${DB_NAME}/library/added &>>log
 ./kraken2-build --add-to-library $LIBRARY_INPUT --db ${DB_NAME} &>>log

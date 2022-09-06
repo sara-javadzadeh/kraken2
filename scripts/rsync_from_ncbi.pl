@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-# Copyright 2013-2020, Derrick Wood <dwood@cs.jhu.edu>
+# Copyright 2013-2021, Derrick Wood <dwood@cs.jhu.edu>
 #
 # This file is part of the Kraken 2 taxonomic sequence classification system.
 
@@ -43,7 +43,7 @@ while (<>) {
   my $full_path = $ftp_path . "/" . basename($ftp_path) . $suffix;
   # strip off server/leading dir name to allow --files-from= to work w/ rsync
   # also allows filenames to just start with "all/", which is nice
-  if (! ($full_path =~ s#^ftp://${qm_server}${qm_server_path}/##)) {
+  if (! ($full_path =~ s#^https://${qm_server}${qm_server_path}/##)) {
     die "$PROG: unexpected FTP path (new server?) for $ftp_path\n";
   }
   $manifest{$full_path} = $taxid;
@@ -79,29 +79,40 @@ if ($is_protein && ! $use_ftp) {
   close MANIFEST;
 }
 
+sub ftp_connection {
+    my $ftp = Net::FTP->new($SERVER, Passive => 1)
+        or die "$PROG: FTP connection error: $@\n";
+    $ftp->login($FTP_USER, $FTP_PASS)
+        or die "$PROG: FTP login error: " . $ftp->message() . "\n";
+    $ftp->binary()
+        or die "$PROG: FTP binary mode error: " . $ftp->message() . "\n";
+    $ftp->cwd($SERVER_PATH)
+        or die "$PROG: FTP CD error: " . $ftp->message() . "\n";
+    return $ftp;
+}
+
 if ($use_ftp) {
   print STDERR "Step 1/2: Performing ftp file transfer of requested files\n";
-  my $ftp = Net::FTP->new($SERVER, Passive => 1)
-    or die "$PROG: FTP connection error: $@\n";
-  $ftp->login($FTP_USER, $FTP_PASS)
-    or die "$PROG: FTP login error: " . $ftp->message() . "\n";
-  $ftp->binary()
-    or die "$PROG: FTP binary mode error: " . $ftp->message() . "\n";
-  $ftp->cwd($SERVER_PATH)
-    or die "$PROG: FTP CD error: " . $ftp->message() . "\n";
   open MANIFEST, "<", "manifest.txt"
     or die "$PROG: can't open manifest: $!\n";
   mkdir "all" or die "$PROG: can't create 'all' directory: $!\n";
   chdir "all" or die "$PROG: can't chdir into 'all' directory: $!\n";
   while (<MANIFEST>) {
     chomp;
-    $ftp->get($_)
-      or do {
-        my $msg = $ftp->message();
-        if ($msg !~ /: No such file or directory$/) {
-          warn "$PROG: unable to download $_: $msg\n";
-        }
-      };
+    my $ftp = ftp_connection();
+    my $try = 0;
+    my $ntries = 5;
+    my $sleepsecs = 3;
+    while($try < $ntries) {
+        $try++;
+        last if $ftp->get($_);
+        warn "$PROG: unable to download $_ on try $try of $ntries: ".$ftp->message()."\n";
+        last if $try == $ntries;
+        sleep $sleepsecs;
+        $sleepsecs *= 3;
+    }
+    die "$PROG: unable to download ftp://${SERVER}${SERVER_PATH}/$_\n" if $try == $ntries;
+    $ftp->quit;
   }
   close MANIFEST;
   chdir ".." or die "$PROG: can't return to correct directory: $!\n";

@@ -13,11 +13,11 @@ echo "Building database with virus $virus and k $K" >> log
 
 # 0.89 is the ratio of the default kmer and minimizer (35 and 31).
 # / 1 is to truncate the floating point number
-M=$(awk "BEGIN{print (int($K * 0.89))}") &&
+M=$(bc <<< $K*0.89/1) &&
 echo "For k = $K : Minimizer length = $M" >> log &&
-S=$(awk "BEGIN{print (int( $M /4) - 1)}") &&
+S=$(bc <<< $M/4-1) &&
 echo "For k = $K : Minimizer spaces = $S" >> log &&
 DB_NAME="Kraken2StandardDB_k_${K}_${virus}"
-rm ./${DB_NAME}/seqid2taxid.map ./${DB_NAME}/hash.k2d ./${DB_NAME}/opts.k2d ./${DB_NAME}/taxo.k2d &>>log
+rm -f ./${DB_NAME}/seqid2taxid.map ./${DB_NAME}/hash.k2d ./${DB_NAME}/opts.k2d ./${DB_NAME}/taxo.k2d &>>log
 /usr/bin/time -v ./kraken2-build --build --db $DB_NAME --kmer-len $K --minimizer-len $M --minimizer-spaces $S &>>log &&
 echo "done with k= $K" >> log

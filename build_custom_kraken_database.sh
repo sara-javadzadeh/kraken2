@@ -12,10 +12,13 @@ LIBRARY_INPUT=$2
 BASE_NODE_ID=$3
 INCLUDE_HUMAN_GENOME=1
 SUFFIX="${VIRUS_NAME}_hg";
-for K in 25 ; do
-  bash download_custom_kraken_library.sh $K $SUFFIX $LIBRARY_INPUT $BASE_NODE_ID $INCLUDE_HUMAN_GENOME &>> log
-  bash build_custom_kraken_index.sh $SUFFIX $K
-done
+
+rm -f log
+
+#for K in 25 ; do
+#  bash download_custom_kraken_library.sh $K $SUFFIX $LIBRARY_INPUT $BASE_NODE_ID $INCLUDE_HUMAN_GENOME &>> log
+#  bash build_custom_kraken_index.sh $SUFFIX $K
+#done
 INCLUDE_HUMAN_GENOME=0
 SUFFIX=$VIRUS_NAME
 for K in 18 22 ; do
